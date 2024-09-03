@@ -5,25 +5,32 @@ import {
   MAX_DATE,
   MIN_DATE,
   OPTION_EVENT_KEYS,
+  SIZE_LIST,
+  THEME_LIST,
   VIEW_LIST,
   VIEW_ORDER,
 } from '@/helpers/consts';
-import { error } from '@/helpers/util';
 import type { InternalOptions, Options, View } from '@t/options';
 import {
   assign,
   forEach,
   isArray,
-  isDate,
-  isFunction,
   isNullish,
-  isObject,
   isPlainObject,
   isString,
   isUndefined,
-  reduce,
   values,
 } from 'doumi';
+import {
+  assert,
+  boolean,
+  date,
+  define,
+  func,
+  object,
+  optional,
+  string,
+} from 'superstruct';
 
 export function isView(view: any) {
   return isString(view) && VIEW_LIST.includes(view);
@@ -33,94 +40,84 @@ export function checkView(view: View, minView: View) {
   return VIEW_ORDER[view] >= VIEW_ORDER[minView];
 }
 
-function inValid(key: string, message: string) {
-  error(`Invalid options`, `options.${key} should be ${message}`);
-}
-
-type ValidationMap = Record<string, (...args: any[]) => any>;
-
-const VALIDATION_MAP: ValidationMap = assign(
-  {},
-  reduce(
-    DEFUALT_OPTIONS,
-    (obj, value, key) => {
-      const type = typeof value;
-      obj[key] = (val: any) => {
-        if (typeof val === type) return;
-        inValid(key, type);
-      };
-      return obj;
-    },
-    {} as ValidationMap
-  ),
-  ['minDate', 'maxDate', 'selectedDate'].reduce((obj, item) => {
-    obj[item] = (val: any) => {
-      if (isUndefined(val) || isDate(val)) return;
-      inValid(item, 'Date');
-    };
-    return obj;
-  }, {} as ValidationMap),
-  ['className', 'placeHolder'].reduce((obj, item) => {
-    obj[item] = (val: any) => {
-      if (isUndefined(val) || isString(val)) return;
-      inValid(item, 'string');
-    };
-    return obj;
-  }, {} as ValidationMap),
-  ['view', 'minView'].reduce((obj, item) => {
-    obj[item] = (val: any) => {
-      if (isUndefined(val) || VIEW_LIST.includes(val)) return;
-      inValid(item, VIEW_LIST.join(' | '));
-    };
-    return obj;
-  }, {} as ValidationMap),
-  OPTION_EVENT_KEYS.reduce((obj, item) => {
-    obj[item] = (val: any) => {
-      if (isUndefined(val) || isFunction(val)) return;
-      inValid(item, 'function');
-    };
-    return obj;
-  }, {} as ValidationMap),
-  {
-    position: (val: any) => {
-      if (isUndefined(val)) return;
-      if (isString(val)) {
-        const [pos, edge, ...ele] = val.split('-');
+export const schema = object({
+  toggleSelected: optional(boolean()),
+  shortcuts: optional(boolean()),
+  position: optional(
+    define('position', (value) => {
+      if (isUndefined(value)) return true;
+      if (isString(value)) {
+        const [pos, edge, ...ele] = value.split('-');
         if (
           !ele.length &&
           ['top', 'bottom', 'left', 'right'].includes(pos) &&
           (isUndefined(edge) || ['start', 'end'].includes(edge))
         )
-          return;
+          return true;
       }
-      inValid('position', 'Position');
+      return false;
+    })
+  ),
+  view: optional(
+    define('view', isView || `value must be in ${VIEW_LIST.join(' | ')}`)
+  ),
+  minView: optional(
+    define('minView', isView || `value must be in ${VIEW_LIST.join(' | ')}`)
+  ),
+  showOtherMonths: optional(boolean()),
+  selectOtherMonths: optional(boolean()),
+  moveOtherMonths: optional(boolean()),
+  navigationLoop: optional(boolean()),
+  autoClose: optional(boolean()),
+  readOnly: optional(boolean()),
+  animation: optional(boolean()),
+  inline: optional(boolean()),
+  backdrop: optional(boolean()),
+  theme: optional(
+    define(
+      'theme',
+      (val) =>
+        THEME_LIST.includes(val as any) ||
+        `value must be in ${THEME_LIST.join(' | ')}`
+    )
+  ),
+  size: optional(
+    define(
+      'size',
+      (val) =>
+        SIZE_LIST.includes(val as any) ||
+        `value must be in ${SIZE_LIST.join(' | ')}`
+    )
+  ),
+  titleFormat: optional(
+    object({
+      days: optional(string()),
+      months: optional(string()),
+      years: optional(string()),
+    })
+  ),
+  minDate: optional(date()),
+  maxDate: optional(date()),
+  viewDate: optional(date()),
+  selectedDate: optional(date()),
+  className: optional(string()),
+  dateFormat: optional(string()),
+  placeHolder: optional(string()),
+  ...OPTION_EVENT_KEYS.reduce(
+    (obj, item) => {
+      obj[item] = optional(func());
+      return obj;
     },
-    theme: (val: any) => {
-      if (isString(val) && (val === 'light' || val === 'dark')) return;
-      inValid('theme', 'light | dark');
-    },
-    size: (val: any) => {
-      if (isString(val) && (val === 'small' || val === 'normal')) return;
-      inValid('theme', 'small | normal');
-    },
-    titleFormat: (val: any) => {
-      if (isUndefined(val)) return;
-      if (!isObject(val))
-        return inValid(
-          'titleFormat',
-          '{ days?: string; months?: string; years?: string }'
-        );
-      forEach(DEFAULT_TITLE_FORMAT, (_, key) => {
-        const matcher = ['string', 'undefined'];
-        if (matcher.includes(typeof val[key])) return;
-        inValid(`titleFormat.${key}`, matcher.join(' | '));
-      });
-    },
-    buttons: (val: InternalOptions['buttons']) => {
-      if (isUndefined(val)) return;
-      const buttons = isArray(val) ? val : [val];
-      const isError = !buttons.every((button) => {
-        if (isString(button) && BUTTON_PRESETS.includes(button)) return true;
+    {} as Record<string, any>
+  ),
+  locale: optional(object()),
+  buttons: optional(
+    define('buttons', (value) => {
+      if (isUndefined(value)) return true;
+      const buttons = isArray(value) ? value : [value];
+      return buttons.every((button) => {
+        if (isString(button) && BUTTON_PRESETS.includes(button as any))
+          return true;
         if (isPlainObject(button)) {
           const { className, id, dataset, attrs, innerHTML } = button;
           const isValidString = [className, id, innerHTML].every(
@@ -134,14 +131,9 @@ const VALIDATION_MAP: ValidationMap = assign(
         }
         return false;
       });
-      if (isError)
-        error(
-          'buttons',
-          `value must be in ${BUTTON_PRESETS.map((item) => '`' + item + '`').join(' | ')} or button-options object`
-        );
-    },
-  }
-);
+    })
+  ),
+});
 
 export default function checkSchema(options: Options): InternalOptions {
   const opt = assign({}, DEFUALT_OPTIONS, options) as any;
@@ -154,11 +146,7 @@ export default function checkSchema(options: Options): InternalOptions {
   }
 
   // Validate
-  forEach(opt, (value, key) => {
-    const validator = VALIDATION_MAP[key];
-    if (!validator) return;
-    validator(value);
-  });
+  assert(opt as any, schema);
 
   if (!checkView(opt.view, opt.minView)) opt.view = opt.minView;
 

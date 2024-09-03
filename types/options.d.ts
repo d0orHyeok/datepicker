@@ -58,6 +58,8 @@ export type InternalOptions = {
   /** The maximum date of calendar, Can't be set to more than `9999-12-31` */
   maxDate: Date;
 
+  viewDate: Date;
+
   /** The initial view of the calendar. (e.g. `days` | `months` | `years`) By default, `days` */
   view: View;
   /** The minimum view of the calendar. The values are same as view. By default, `days` */

@@ -46,6 +46,10 @@ export const DEFAULT_TITLE_FORMAT = {
   years: 'YYYY1 - YYYY2',
 };
 
+export const THEME_LIST = ['light', 'dark'] as const;
+
+export const SIZE_LIST = ['small', 'normal'] as const;
+
 export const OPTION_EVENT_KEYS = [
   'onShow',
   'onHide',
